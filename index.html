@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zuccess Quoter - Smart Home Quotation System</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <header class="app-header">
+        <div class="app-header-brand">
+            <img src="zuccess_logo_in_website.png" alt="Zuccess logo" class="app-header-logo">
+            <span>Zuccess Quoter</span>
+        </div>
+        <div class="user-chip" id="nav-user" style="display: none;">
+            <span id="user-name"></span>
+            <button id="logout-btn" class="btn-secondary btn-compact" type="button">Logout</button>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="stepper" id="stepper">
+            <button class="stepper-item current" data-page="landing-page" data-step-index="0" type="button">
+                <span class="step-index">1</span>
+                <span class="step-label">Login</span>
+            </button>
+            <button class="stepper-item" data-page="catalog-page" data-step-index="1" type="button">
+                <span class="step-index">2</span>
+                <span class="step-label">Catalog</span>
+            </button>
+            <button class="stepper-item" data-page="labor-page" data-step-index="2" type="button">
+                <span class="step-index">3</span>
+                <span class="step-label">Labor</span>
+            </button>
+            <button class="stepper-item" data-page="customer-page" data-step-index="3" type="button">
+                <span class="step-index">4</span>
+                <span class="step-label">Customer &amp; Review</span>
+            </button>
+        </div>
+
+        <section id="landing-page" class="page active">
+            <div class="login-wrapper">
+                <div class="login-card">
+                    <img src="zuccess_logo_in_website.png" alt="Zuccess logo" class="login-logo">
+                    <h1 class="login-title">Welcome back</h1>
+                    <p class="login-subtitle">Sign in to start building professional quotations.</p>
+                    <form id="login-form" class="login-form">
+                        <div class="form-group">
+                            <label for="username" class="form-label">Username</label>
+                            <input type="text" id="username" class="form-input" required autocomplete="username">
+                        </div>
+                        <div class="form-group">
+                            <label for="password" class="form-label">Password</label>
+                            <input type="password" id="password" class="form-input" required autocomplete="current-password">
+                        </div>
+                        <button type="submit" class="btn-primary btn-full">Login</button>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <section id="catalog-page" class="page">
+            <div class="page-header with-nav">
+                <div class="brand-banner" id="brand-banner">
+                    <img id="catalog-brand-logo" src="" alt="Selected brand" class="brand-banner-logo" hidden>
+                    <div class="brand-banner-text">
+                        <span class="brand-banner-label" id="catalog-brand-name">Select a brand to continue</span>
+                        <p class="brand-banner-subtitle">Choose between Orvibo and Zuccess Standard catalogues.</p>
+                    </div>
+                </div>
+                <div class="page-header-actions">
+                    <button id="change-brand-btn" class="btn-secondary" type="button">Change Brand</button>
+                    <button id="proceed-labor-btn" class="btn-primary" type="button">Proceed to Labor Estimation</button>
+                </div>
+            </div>
+
+            <div class="catalog-container">
+                <div class="category-tabs">
+                    <button class="category-tab active" data-category="panels">Smart Panels &amp; Gateways</button>
+                    <button class="category-tab" data-category="switches">Light Switches</button>
+                    <button class="category-tab" data-category="curtains">Curtain Control</button>
+                    <button class="category-tab" data-category="sensors">Sensors</button>
+                    <button class="category-tab" data-category="sockets">Sockets</button>
+                    <button class="category-tab" data-category="access">Access Control</button>
+                    <button class="category-tab" data-category="climate">Climate Control</button>
+                </div>
+
+                <div class="selected-summary" id="selected-summary" style="display: none;">
+                    <div class="summary-content">
+                        <h3>Selected Items: <span id="selected-count">0</span></h3>
+                        <p>Total: <span id="selected-total">AED 0.00</span></p>
+                    </div>
+                </div>
+
+                <div class="products-grid" id="products-grid"></div>
+                <div class="empty-state" id="products-empty-state" hidden>
+                    <p>No products available for the selected brand yet.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="labor-page" class="page">
+            <div class="page-header with-nav">
+                <button id="back-to-catalog-btn" class="btn-ghost" type="button">Back</button>
+                <h2>Labor Estimation</h2>
+                <div class="page-header-actions">
+                    <button id="proceed-customer-btn" class="btn-primary" type="button">Proceed to Customer Details</button>
+                </div>
+            </div>
+
+            <div class="labor-form">
+                <div class="form-group">
+                    <label for="work-days" class="form-label">Estimated Work Days</label>
+                    <input type="number" id="work-days" class="form-input" min="1" value="5">
+                </div>
+
+                <div class="form-group">
+                    <label for="programming-fee" class="form-label">Estimated Programming Fee (AED)</label>
+                    <input type="number" id="programming-fee" class="form-input" min="0" step="0.01">
+                </div>
+
+                <div class="form-group">
+                    <label for="installation-fee" class="form-label">Estimated Installation Fee (AED)</label>
+                    <input type="number" id="installation-fee" class="form-input" min="0" step="0.01">
+                </div>
+
+                <div class="form-group">
+                    <label for="discount" class="form-label">Discount (AED or %)</label>
+                    <input type="text" id="discount" class="form-input" placeholder="Enter amount or percentage">
+                </div>
+
+                <button id="calculate-total-btn" class="btn-secondary" type="button">Update Total</button>
+
+                <div class="total-display" id="total-display">
+                    <h3>Total Estimation</h3>
+                    <div class="total-breakdown">
+                        <div class="total-item">
+                            <span>Products Total:</span>
+                            <span id="products-total">AED 0.00</span>
+                        </div>
+                        <div class="total-item">
+                            <span>Installation:</span>
+                            <span id="installation-total">AED 0.00</span>
+                        </div>
+                        <div class="total-item">
+                            <span>Programming:</span>
+                            <span id="programming-total">AED 0.00</span>
+                        </div>
+                        <div class="total-item">
+                            <span>Discount:</span>
+                            <span id="discount-total">-AED 0.00</span>
+                        </div>
+                        <div class="total-item total-final">
+                            <span>Grand Total:</span>
+                            <span id="grand-total">AED 0.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="customer-page" class="page">
+            <div class="page-header with-nav">
+                <button id="back-to-labor-btn" class="btn-ghost" type="button">Back</button>
+                <h2>Customer Details</h2>
+                <div class="page-header-actions">
+                    <button id="generate-pdf-btn" class="btn-primary" type="button">Review &amp; Generate PDF</button>
+                </div>
+            </div>
+
+            <div class="customer-form">
+                <div class="form-group">
+                    <label for="customer-name" class="form-label">Customer Name *</label>
+                    <input type="text" id="customer-name" class="form-input" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="customer-phone" class="form-label">Customer Phone Number *</label>
+                    <input type="tel" id="customer-phone" class="form-input" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="building-location" class="form-label">Building Location *</label>
+                    <textarea id="building-location" class="form-textarea" rows="3" required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="extra-notes" class="form-label">Extra Notes</label>
+                    <textarea id="extra-notes" class="form-textarea" rows="3"></textarea>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <div id="brand-modal" class="modal brand-modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-card brand-card" role="dialog" aria-modal="true" aria-labelledby="brand-modal-title">
+            <h3 id="brand-modal-title">Select a Product Catalogue</h3>
+            <p class="brand-card-subtitle">Choose which brand catalogue you want to configure.</p>
+            <div class="form-group">
+                <label for="brand-select" class="form-label">Brand</label>
+                <select id="brand-select" class="form-select">
+                    <option value="">Select a brand...</option>
+                </select>
+            </div>
+            <div class="brand-preview" id="brand-preview" hidden>
+                <img id="brand-preview-logo" src="" alt="Brand preview">
+                <span id="brand-preview-name"></span>
+            </div>
+            <div class="brand-modal-actions">
+                <button id="brand-confirm-btn" class="btn-primary" type="button" disabled>Continue</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="review-modal" class="modal">
+        <div class="modal-overlay" data-action="close-modal"></div>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="review-modal-title">
+            <button class="modal-close" data-action="close-modal" aria-label="Close review">&times;</button>
+            <h3 id="review-modal-title">Review Quotation</h3>
+            <div class="modal-section">
+                <div class="modal-section-header">
+                    <h4>Products</h4>
+                    <button class="link-button" data-action="edit-products" type="button">Edit products</button>
+                </div>
+                <div id="review-products" class="review-block"></div>
+            </div>
+            <div class="modal-section">
+                <div class="modal-section-header">
+                    <h4>Labor Summary</h4>
+                    <button class="link-button" data-action="edit-labor" type="button">Edit labor</button>
+                </div>
+                <div id="review-labor" class="review-block"></div>
+            </div>
+            <div class="modal-section">
+                <div class="modal-section-header">
+                    <h4>Customer</h4>
+                </div>
+                <div id="review-customer" class="review-block"></div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-secondary" data-action="close-modal" type="button">Go Back</button>
+                <button id="confirm-generate-btn" class="btn-primary" type="button">Generate PDF</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <p>Generating quotation...</p>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="products-data.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bcryptjs@2.4.3/dist/bcrypt.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
+
+
