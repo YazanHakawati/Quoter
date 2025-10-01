@@ -975,6 +975,9 @@ body {
     gap: var(--spacing-xl);
     color: var(--text-white);
     z-index: 1;
+    /* Ensure the review modal is scrollable on desktop as well */
+    max-height: calc(100vh - 2 * var(--spacing-2xl));
+    overflow: auto;
 }
 
 .modal-close {

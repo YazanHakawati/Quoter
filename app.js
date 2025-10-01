@@ -1660,13 +1660,14 @@ class ZuccessQuoter {
     async generatePDF(quotationNumber) {
         const quotationHTML = this.createQuotationHTML(quotationNumber);
 
-        return new Promise((resolve, reject) => {
+        const tryIframePrint = () => new Promise((resolve, reject) => {
             const frame = document.createElement('iframe');
             frame.style.position = 'fixed';
             frame.style.right = '0';
             frame.style.bottom = '0';
-            frame.style.width = '0';
-            frame.style.height = '0';
+            // Use non-zero size to improve reliability on desktop browsers
+            frame.style.width = '1px';
+            frame.style.height = '1px';
             frame.style.border = '0';
             frame.style.visibility = 'hidden';
 
@@ -1678,12 +1679,15 @@ class ZuccessQuoter {
                 }, 1000);
             };
 
-            let hasPrinted = false;
+            let completed = false;
+            const finish = () => {
+                if (completed) return;
+                completed = true;
+                cleanup();
+                resolve();
+            };
+
             const handlePrint = () => {
-                if (hasPrinted) {
-                    return;
-                }
-                hasPrinted = true;
                 try {
                     const frameWindow = frame.contentWindow;
                     if (!frameWindow) {
@@ -1692,13 +1696,24 @@ class ZuccessQuoter {
                     if (typeof frameWindow.print !== 'function') {
                         throw new Error('Print API unavailable');
                     }
+
+                    const afterPrint = () => {
+                        frameWindow.removeEventListener('afterprint', afterPrint);
+                        finish();
+                    };
+                    frameWindow.addEventListener('afterprint', afterPrint, { once: true });
+
+                    // Fallback in case afterprint doesn't fire (some browsers)
+                    setTimeout(() => {
+                        frameWindow.removeEventListener('afterprint', afterPrint);
+                        finish();
+                    }, 8000);
+
                     frameWindow.focus();
                     frameWindow.print();
-                    resolve();
                 } catch (error) {
-                    reject(error);
-                } finally {
                     cleanup();
+                    reject(error);
                 }
             };
 
@@ -1727,6 +1742,51 @@ class ZuccessQuoter {
                 frameDoc.close();
             }
         });
+
+        const tryWindowPrint = () => new Promise((resolve, reject) => {
+            const w = window.open('', '_blank');
+            if (!w) {
+                reject(new Error('Popup blocked'));
+                return;
+            }
+            w.document.open();
+            w.document.write(quotationHTML);
+            w.document.close();
+
+            const finish = () => {
+                try { w.close(); } catch (e) {}
+                resolve();
+            };
+
+            const afterPrint = () => {
+                w.removeEventListener('afterprint', afterPrint);
+                finish();
+            };
+            w.addEventListener('afterprint', afterPrint, { once: true });
+
+            // Fallback in case afterprint doesn't fire
+            setTimeout(() => {
+                w.removeEventListener('afterprint', afterPrint);
+                finish();
+            }, 8000);
+
+            w.focus();
+            setTimeout(() => {
+                try {
+                    w.print();
+                } catch (e) {
+                    try { w.close(); } catch (err) {}
+                    reject(e);
+                }
+            }, 100);
+        });
+
+        try {
+            await tryIframePrint();
+        } catch (err) {
+            console.warn('Iframe print failed, falling back to window:', err);
+            await tryWindowPrint();
+        }
     }
 
     createQuotationHTML(quotationNumber) {
@@ -1747,9 +1807,11 @@ class ZuccessQuoter {
                 optionParts.push(`Protocol: ${product.selectedProtocol}`);
             }
             const optionsText = optionParts.length ? `<div class=\"item-options\">${optionParts.join(' | ')}</div>` : '';
+            const imageSrc = product.image_url || brandLogo || headerLogo;
             return `
                 <tr>
                     <td>${index + 1}</td>
+                    <td class=\"image-cell\"><img src=\"${imageSrc}\" alt=\"${product.name}\" class=\"product-image\"></td>
                     <td>${product.name}</td>
                     <td>${product.description || ''}${optionsText}</td>
                     <td>${product.quantity}</td>
@@ -1781,6 +1843,8 @@ class ZuccessQuoter {
         .quotation-info td:first-child { width: 180px; font-weight: 600; background: #fafafa; }
         .products-table { width: 100%; border-collapse: collapse; margin: 32px 0; font-size: 14px; }
         .products-table th, .products-table td { padding: 12px; border: 1px solid #e4e4e4; text-align: left; vertical-align: top; }
+        .products-table .image-cell { width: 90px; }
+        .products-table .product-image { width: 64px; height: 64px; object-fit: contain; display: block; }
         .products-table th { background: #f1f1f1; }
         .item-options { margin-top: 6px; font-size: 12px; color: #777; }
         .summary-table { width: 60%; margin-left: auto; border-collapse: collapse; font-size: 14px; }
@@ -1830,6 +1894,7 @@ class ZuccessQuoter {
             <thead>
                 <tr>
                     <th>Item No.</th>
+                    <th>Image</th>
                     <th>Item Name</th>
                     <th>Description & Options</th>
                     <th>Quantity</th>
