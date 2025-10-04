@@ -1,5 +1,6 @@
 const USER_STORAGE_KEY = 'zuccess_user';
 const DRAFT_STORAGE_KEY = 'zuccess_quotation_draft_v2';
+const PDF_GENERATION_DELAY_MS = 50000;
 
 class ZuccessQuoter {
     constructor() {
@@ -1637,6 +1638,7 @@ class ZuccessQuoter {
         this.showLoading(true);
 
         try {
+            await this.delay(PDF_GENERATION_DELAY_MS);
             await this.generatePDF(quotationNumber);
             const saveResult = await this.saveQuotation(quotationNumber);
 
