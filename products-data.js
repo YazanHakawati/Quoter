@@ -56,8 +56,8 @@ window.PRODUCT_SNAPSHOT = {
     },
     {
       "id": "orvibo-3",
-      "name": "MixSwitch · Bach 8 keys (grey)",
-      "description": "MixSwitch · Bach 8 keys (grey)",
+      "name": "MixSwitch ï¿½ Bach 8 keys (grey)",
+      "description": "MixSwitch ï¿½ Bach 8 keys (grey)",
       "category": "switches",
       "brand": "orvibo",
       "colors": [
@@ -74,8 +74,8 @@ window.PRODUCT_SNAPSHOT = {
     },
     {
       "id": "orvibo-4",
-      "name": "MixSwitch · Bach 4 keys (grey)",
-      "description": "MixSwitch · Bach 4 keys (grey)",
+      "name": "MixSwitch ï¿½ Bach 4 keys (grey)",
+      "description": "MixSwitch ï¿½ Bach 4 keys (grey)",
       "category": "switches",
       "brand": "orvibo",
       "colors": [
@@ -828,6 +828,7 @@ window.PRODUCT_SNAPSHOT = {
       "price": 556.0,
       "image_url": "https://i.postimg.cc/j5vCrSGQ/image.png"
     },
+  
     {
       "id": "zuccess-51",
       "name": "BAC-002ALW Thermostat Temperature matt black",
@@ -1934,6 +1935,16 @@ window.PRODUCT_SNAPSHOT = {
       ],
       "price": 149.0,
       "image_url": "https://i.postimg.cc/zvNWCFMz/image.png"
-    }
+    },
+    { "id": "zuccess-118",
+      "name": "Dropair Gateway", 
+      "description": "VRF Gateway for smart control",
+       "category": "climate",
+       "brand": "zuccess",
+       "colors": ["Original"],
+       "protocols": ["WiFi"],
+       "price": 819.0,
+       "image_url": "https://justcare.tech/wp-content/uploads/2024/10/drop-air-1.png" 
+   }
   ]
 };
