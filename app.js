@@ -1835,7 +1835,7 @@ class ZuccessQuoter {
             image:        { type: 'jpeg', quality: 0.98 },
             html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
             jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak:    { mode: ['css', 'legacy'], avoid: ['.avoid-break', '.section-card', '.signature-block', 'tr'] }
+            pagebreak:    { mode: ['css', 'legacy'], avoid: ['.avoid-break', '.no-break', '.signature-card', 'tr'] }
         };
 
         try {
@@ -1849,200 +1849,342 @@ class ZuccessQuoter {
     }
 
     createQuotationHTML(quotationNumber) {
+        const escapeHtml = (value) => {
+            if (value === null || value === undefined) {
+                return '';
+            }
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const formatCurrency = (value) => 'AED ' + Number(value || 0).toFixed(2);
+        const formatDiscount = (value) => value > 0 ? '-AED ' + Number(value).toFixed(2) : 'AED 0.00';
+
         const currentDate = new Date().toLocaleDateString('en-GB');
-        const productsTotal = this.selectedProducts.reduce((sum, product) => sum + product.subtotal, 0);
+        const productsTotal = this.selectedProducts.reduce((sum, product) => sum + (Number(product.subtotal) || 0), 0);
+
         const brandDetails = this.brandMeta?.[this.selectedBrand] || null;
-        const brandLabel = brandDetails?.label || (this.selectedBrand ? this.selectedBrand.toUpperCase() : 'Catalogue');
-        const headerLogo = this.documentAssets?.headerLogo || 'zuccess_logo_in_document.png';
-        const brandLogo = brandDetails?.documentLogo || brandDetails?.websiteLogo || headerLogo;
-        const stampLogo = this.documentAssets?.stamp || 'Zuccess%20Stamp.png';
+        const brandLabelRaw = brandDetails?.label || (this.selectedBrand ? this.selectedBrand.toUpperCase() : 'Catalogue');
+        const headerLogoRaw = this.documentAssets?.headerLogo || 'zuccess_logo_in_document.png';
+        const brandLogoRaw = brandDetails?.documentLogo || brandDetails?.websiteLogo || headerLogoRaw;
+        const stampLogoRaw = this.documentAssets?.stamp || 'Zuccess%20Stamp.png';
+
         const workDays = Number(this.quotationData?.labor?.days) || 0;
+        const programmingFee = Number(this.quotationData?.labor?.programmingFee) || 0;
+        const installationFee = Number(this.quotationData?.labor?.installationFee) || 0;
+        const discountValue = Number(this.quotationData?.labor?.discount) || 0;
+        const totalAmount = Number(this.quotationData?.total) || 0;
+
+        const customer = this.quotationData.customer || {};
+        const customerName = escapeHtml(customer.name || '');
+        const customerPhone = escapeHtml(customer.phone || '');
+        const customerLocationHtml = escapeHtml(customer.location || '').replace(/\n/g, '<br>');
+        const customerNotesRaw = escapeHtml(customer.notes || '');
+        const customerNotes = customerNotesRaw ? customerNotesRaw.replace(/\n/g, '<br>') : '';
+
+        const preparedBy = escapeHtml(this.currentUser?.full_name || 'Zuccess Team');
+        const brandLabel = escapeHtml(brandLabelRaw);
+        const headerLogo = escapeHtml(headerLogoRaw);
+        const brandLogo = escapeHtml(brandLogoRaw);
+        const stampLogo = escapeHtml(stampLogoRaw);
+        const quotationNumberSafe = escapeHtml(quotationNumber);
+
+        const workDaysDisplay = workDays > 0 ? `${workDays} day${workDays === 1 ? '' : 's'}` : 'Not specified';
+        const customerNameDisplay = customerName || 'N/A';
+        const customerPhoneDisplay = customerPhone || 'N/A';
+        const locationDisplay = customerLocationHtml || 'N/A';
 
         const productsRows = this.selectedProducts.map((product, index) => {
+            const safeName = escapeHtml(product.name || '');
+            const safeDescription = escapeHtml(product.description || '');
+            const descriptionHtml = safeDescription ? safeDescription.replace(/\n/g, '<br>') : '';
             const optionParts = [];
             if (product.selectedColor) {
-                optionParts.push(`Color: ${product.selectedColor}`);
+                optionParts.push(`Color: ${escapeHtml(product.selectedColor)}`);
             }
             if (product.selectedProtocol) {
-                optionParts.push(`Protocol: ${product.selectedProtocol}`);
+                optionParts.push(`Protocol: ${escapeHtml(product.selectedProtocol)}`);
             }
-            const optionsText = optionParts.length ? `<div class=\"item-options\">${optionParts.join(' | ')}</div>` : '';
-            const descText = product.description ? `<div class=\"desc-card\">${product.description}</div>` : '';
-            const imageSrc = product.image_url || brandLogo || headerLogo;
+            const optionsText = optionParts.length ? `<div class="item-options">${optionParts.join(' | ')}</div>` : '';
+            const descBlock = descriptionHtml ? `<div class="desc-card">${descriptionHtml}</div>` : '';
+            const imageSrc = escapeHtml(product.image_url || brandLogoRaw || headerLogoRaw);
+            const quantity = Number(product.quantity) || 0;
             return `
                 <tr>
                     <td>${index + 1}</td>
-                    <td class=\"image-cell\"><img src=\"${imageSrc}\" alt=\"${product.name}\" class=\"product-image\"></td>
-                    <td>${product.name}</td>
-                    <td>${descText}${optionsText}</td>
-                    <td>${product.quantity}</td>
-                    <td>AED ${product.price.toFixed(2)}</td>
-                    <td>AED ${product.subtotal.toFixed(2)}</td>
+                    <td class="image-cell"><img src="${imageSrc}" alt="${safeName}" class="product-image"></td>
+                    <td>${safeName}</td>
+                    <td>${descBlock}${optionsText}</td>
+                    <td>${quantity}</td>
+                    <td>${formatCurrency(product.price)}</td>
+                    <td>${formatCurrency(product.subtotal)}</td>
                 </tr>
             `;
         }).join('');
+
+        const notesBlock = customerNotes ? `<p class="text-body"><strong>Client Notes:</strong> ${customerNotes}</p>` : '';
 
         return `
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Quotation ${quotationNumber}</title>
+    <title>Quotation ${quotationNumberSafe}</title>
     <style>
-        :root { --accent: #EA7946; --ink: #1f2937; --muted: #6b7280; --soft: #f3f4f6; --border: #e5e7eb; }
+        :root { --accent: #EA7946; --accent-soft: rgba(234, 121, 70, 0.08); --bg: #f3f4f6; --surface: #ffffff; --ink: #111827; --ink-soft: #374151; --muted: #6b7280; --border: #e5e7eb; --shadow: rgba(15, 23, 42, 0.08); }
         * { box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; margin: 0; padding: 24px; color: var(--ink); background: #f9fafb; }
-        .document-shell { background: #fff; border-radius: 14px; box-shadow: 0 14px 44px rgba(8, 8, 68, 0.08); padding: 28px; border: 1px solid var(--border); }
-        .document-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
-        .document-logo { width: 140px; height: auto; object-fit: contain; }
-        .document-header-details { flex: 1; }
-        .company-name { font-size: 22px; font-weight: 800; color: var(--accent); margin-bottom: 6px; letter-spacing: 0.2px; }
-        .company-meta { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
-        .brand-badge { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-radius: 14px; background: rgba(234, 121, 70, 0.08); border: 1px solid rgba(234, 121, 70, 0.25); }
-        .brand-badge img { width: 48px; height: 48px; object-fit: contain; }
-        .brand-badge span { font-weight: 700; font-size: 13px; color: var(--accent); text-transform: uppercase; letter-spacing: 0.6px; }
-
-        .quotation-info { margin: 18px 0 14px; }
-        .quotation-info table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-        .quotation-info td { padding: 8px 10px; border: 1px solid var(--border); }
-        .quotation-info td:first-child { width: 180px; font-weight: 700; background: #fafafa; color: #374151; }
-
-        .section-title { font-size: 18px; margin: 18px 0 8px; color: #111827; }
-        .section-card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; box-shadow: 0 8px 28px rgba(15, 23, 42, 0.06); }
-        .section-card .card-title { font-size: 16px; font-weight: 700; color: #111827; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
-        .section-card .card-title::before { content: ''; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
-        .section-card p { margin: 8px 0; color: var(--muted); font-size: 13.5px; line-height: 1.6; }
-
-        .products-table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 13.2px; table-layout: fixed; }
-        .products-table th, .products-table td { padding: 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
-        .products-table th { background: #f3f4f6; color: #111827; position: relative; }
+        body { font-family: 'Inter','Segoe UI', Arial, sans-serif; margin: 0; background: var(--bg); color: var(--ink); padding: 32px 24px; }
+        .document-shell { max-width: 780px; margin: 0 auto; background: var(--surface); border-radius: 18px; border: 1px solid var(--border); box-shadow: 0 18px 55px rgba(15,23,42,0.12); padding: 32px 36px; }
+        .document-header { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; border-bottom: 1px solid var(--border); padding-bottom: 18px; margin-bottom: 24px; }
+        .identity { display: flex; gap: 16px; align-items: flex-start; }
+        .document-logo { width: 120px; height: auto; object-fit: contain; border-radius: 12px; background: #fff; padding: 4px; border: 1px solid var(--border); }
+        .company-name { font-size: 22px; font-weight: 800; margin: 0 0 6px; color: var(--accent); letter-spacing: 0.2px; }
+        .company-meta { font-size: 13px; color: var(--muted); line-height: 1.6; margin: 0; }
+        .brand-chip { display: flex; align-items: center; gap: 12px; background: var(--accent-soft); border: 1px solid rgba(234,121,70,0.35); border-radius: 14px; padding: 10px 18px; }
+        .brand-chip img { width: 48px; height: 48px; object-fit: contain; background: #fff; border-radius: 12px; padding: 6px; border: 1px solid rgba(234,121,70,0.35); }
+        .brand-chip .chip-stack { display: flex; flex-direction: column; gap: 4px; }
+        .chip-label { font-size: 11px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.08em; }
+        .chip-value { font-weight: 700; font-size: 15px; color: var(--accent); }
+        .section-block { margin-bottom: 24px; }
+        .card { border-radius: 16px; border: 1px solid var(--border); box-shadow: 0 14px 36px rgba(15,23,42,0.08); background: var(--surface); padding: 20px 24px; }
+        .card.accent { background: linear-gradient(145deg, rgba(234,121,70,0.14), rgba(234,121,70,0.06)); border-color: rgba(234,121,70,0.35); }
+        .card.soft { background: #fdfaf7; }
+        .card.table-card { padding: 20px 0 0; border: 1px solid rgba(234,121,70,0.2); box-shadow: 0 20px 40px rgba(15,23,42,0.12); border-radius: 18px; }
+        .card.table-card .section-heading { padding: 0 24px; }
+        .card.table-card .table-wrapper { padding: 0 24px 24px; }
+        .section-heading { margin-bottom: 14px; }
+        .section-heading h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--ink); }
+        .section-heading span { display: block; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-top: 6px; }
+        .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+        .info-item { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+        .info-item .label { font-size: 11px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.08em; }
+        .info-item .value { font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 6px; word-break: break-word; }
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+        .summary-item { background: #fff; border: 1px dashed rgba(234,121,70,0.4); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+        .summary-item .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+        .summary-item .value { font-size: 16px; font-weight: 700; color: var(--ink); }
+        .summary-item.highlight { background: var(--accent); color: #fff; border: none; box-shadow: 0 18px 40px rgba(234,121,70,0.32); }
+        .summary-item.highlight .label { color: rgba(255,255,255,0.8); }
+        .summary-item.highlight .value { color: #fff; }
+        .summary-item.discount .value { color: var(--accent); }
+        .summary-item.subtle .value { color: var(--muted); font-weight: 600; }
+        .text-body { font-size: 13.5px; line-height: 1.7; color: var(--muted); margin: 10px 0; }
+        .text-body strong { color: var(--ink); }
+        .products-table { width: 100%; border-collapse: collapse; font-size: 13px; }
         .products-table thead { display: table-header-group; }
-        .products-table tfoot { display: table-row-group; }
-        .products-table .image-cell { width: 84px; }
-        .products-table .product-image { width: 60px; height: 60px; object-fit: contain; display: block; }
-        .products-table tr { break-inside: avoid; page-break-inside: avoid; }
-        .item-options { margin-top: 6px; font-size: 12px; color: var(--muted); }
-        .desc-card { background: #f9fafb; border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; color: #374151; margin-bottom: 6px; }
-
-        .summary-table { width: 62%; margin-left: auto; border-collapse: collapse; font-size: 13.5px; }
-        .summary-table td { padding: 10px; border: 1px solid var(--border); }
-        .total-row { font-weight: 800; background: #f3f4f6; }
-
-        .signature-block { margin-top: 32px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
-        .signature-details { font-size: 13px; color: var(--muted); }
+        .products-table tbody { display: table-row-group; }
+        .products-table th { background: rgba(234,121,70,0.12); color: var(--ink); font-weight: 700; padding: 12px 10px; border-bottom: 1px solid rgba(234,121,70,0.3); text-transform: uppercase; font-size: 11px; letter-spacing: 0.08em; }
+        .products-table td { padding: 12px 10px; border-bottom: 1px solid var(--border); vertical-align: top; color: var(--ink-soft); }
+        .products-table tr:nth-child(even) { background: #fafafa; }
+        .products-table .image-cell { width: 82px; }
+        .products-table .product-image { width: 60px; height: 60px; object-fit: contain; border-radius: 12px; border: 1px solid var(--border); padding: 4px; background: #fff; }
+        .desc-card { border-left: 3px solid rgba(234,121,70,0.6); background: rgba(234,121,70,0.08); border-radius: 10px; padding: 8px 10px; color: var(--ink-soft); margin-bottom: 8px; }
+        .item-options { margin-top: 4px; font-size: 12px; color: var(--muted); }
+        .two-column { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+        ul { padding-left: 18px; margin: 8px 0 12px; color: var(--muted); }
+        ul li { margin-bottom: 6px; }
+        .bank-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+        .bank-item { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+        .bank-item .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+        .bank-item .value { font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 6px; }
+        .signature-card { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-radius: 16px; border: 1px solid var(--border); background: #fff; padding: 16px 24px; box-shadow: 0 12px 28px rgba(15,23,42,0.06); }
+        .signature-details { font-size: 13px; color: var(--muted); line-height: 1.6; }
         .document-stamp { width: 140px; height: auto; object-fit: contain; }
-        .footer { margin-top: 28px; text-align: center; font-size: 12px; color: var(--muted); line-height: 1.5; }
-        .bank-details { margin-top: 16px; padding: 12px; background: #fafafa; border: 1px solid var(--border); border-radius: 10px; }
-
-        .avoid-break { break-inside: avoid; page-break-inside: avoid; }
-        .page-break { page-break-before: always; break-before: page; }
-        h2, h3 { page-break-after: avoid; break-after: avoid-page; }
-
+        .footer { border-top: 1px solid var(--border); margin-top: 28px; padding-top: 16px; text-align: center; font-size: 12px; color: var(--muted); line-height: 1.5; }
+        .no-break { page-break-inside: avoid; break-inside: avoid; }
+        .force-break { page-break-before: always; break-before: page; }
+        table, tr, td, th { break-inside: avoid; page-break-inside: avoid; }
+        .table-wrapper { page-break-inside: auto; }
+        .card.table-card { page-break-inside: auto; }
         @page { margin: 12mm; }
     </style>
 </head>
 <body>
-    <div class="document-shell">
-        <div class="document-header avoid-break">
-            <div class="document-header-details">
+    <main class="document-shell">
+        <header class="document-header no-break">
+            <div class="identity">
                 <img src="${headerLogo}" alt="Zuccess logo" class="document-logo">
-                <div class="company-name">Zuccess Intelligent Systems L.L.C</div>
-                <div class="company-meta">Shop02, Akh Building, Jurf3, Ajman<br>www.zuccess.net | +971 54 437 5797</div>
+                <div>
+                    <h1 class="company-name">Zuccess Intelligent Systems L.L.C</h1>
+                    <p class="company-meta">Shop02, Akh Building, Jurf3, Ajman<br>www.zuccess.net | +971 54 437 5797</p>
+                </div>
             </div>
-            <div class="brand-badge">
+            <div class="brand-chip">
                 <img src="${brandLogo}" alt="${brandLabel} logo">
-                <span>${brandLabel}</span>
+                <div class="chip-stack">
+                    <span class="chip-label">Catalogue</span>
+                    <span class="chip-value">${brandLabel}</span>
+                </div>
             </div>
-        </div>
+        </header>
 
-        <div class="quotation-info avoid-break">
-            <table>
-                <tr><td><strong>Date:</strong></td><td>${currentDate}</td></tr>
-                <tr><td><strong>Quotation #:</strong></td><td>${quotationNumber}</td></tr>
-                <tr><td><strong>Brand:</strong></td><td>${brandLabel}</td></tr>
-                <tr><td><strong>Customer:</strong></td><td>${this.quotationData.customer.name} - ${this.quotationData.customer.location}</td></tr>
-                <tr><td><strong>Prepared by:</strong></td><td>${this.currentUser?.full_name || 'Zuccess Team'}</td></tr>
-            </table>
-        </div>
+        <section class="section-block card neutral info-card no-break">
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="label">Quotation #</span>
+                    <span class="value">${quotationNumberSafe}</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Date</span>
+                    <span class="value">${currentDate}</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Customer</span>
+                    <span class="value">${customerNameDisplay}</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Phone</span>
+                    <span class="value">${customerPhoneDisplay}</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Location</span>
+                    <span class="value">${locationDisplay}</span>
+                </div>
+                <div class="info-item">
+                    <span class="label">Prepared By</span>
+                    <span class="value">${preparedBy}</span>
+                </div>
+            </div>
+        </section>
 
-        <div class="section-card summary-card avoid-break">
-            <div class="card-title">Executive Summary</div>
-            <p>We are pleased to present the following proposal outlining the smart home solutions and services that Zuccess Intelligent Home will provide.</p>
-            <p>Our approach focuses on delivering comfort, efficiency, and security through advanced automation systems. Our goal goes beyond supplying devices; we aim to create an intelligent living environment where lighting, curtains, climate, and security systems operate in complete harmony.</p>
-            <p>To ensure the best experience, we recommend a comprehensive service covering installation, programming, and customized scenarios tailored to daily routines. This approach makes your home not just a modern living space, but a benchmark for comfort, energy efficiency, and innovation.</p>
-            <p>With Zuccess Intelligent Home, every detail is designed to simplify your lifestyle and bring smart living within your reach.</p>
-        </div>
+        <section class="section-block card accent no-break">
+            <div class="section-heading">
+                <h2>Executive Summary</h2>
+                <span>Project vision & approach</span>
+            </div>
+            <p class="text-body">We are pleased to present the following proposal outlining the smart home solutions and services that Zuccess Intelligent Home will provide.</p>
+            <p class="text-body">Our approach focuses on delivering comfort, efficiency, and security through advanced automation systems. Our goal goes beyond supplying devices; we aim to create an intelligent living environment where lighting, curtains, climate, and security systems operate in complete harmony.</p>
+            <p class="text-body">To ensure the best experience, we recommend a comprehensive service covering installation, programming, and customized scenarios tailored to daily routines. This approach makes your home not just a modern living space, but a benchmark for comfort, energy efficiency, and innovation.</p>
+            <p class="text-body">With Zuccess Intelligent Home, every detail is designed to simplify your lifestyle and bring smart living within your reach.</p>
+            ${notesBlock}
+        </section>
 
-        <h2 class="section-title">Scope of Work</h2>
-        <table class="products-table">
-            <thead>
-                <tr>
-                    <th>Item No.</th>
-                    <th>Image</th>
-                    <th>Item Name</th>
-                    <th>Description & Options</th>
-                    <th>Quantity</th>
-                    <th>Unit Price</th>
-                    <th>Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${productsRows}
-            </tbody>
-        </table>
+        <section class="section-block card soft no-break">
+            <div class="section-heading">
+                <h2>Investment Overview</h2>
+                <span>Financial breakdown & labor</span>
+            </div>
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <span class="label">Products Total</span>
+                    <span class="value">${formatCurrency(productsTotal)}</span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">Installation Fee</span>
+                    <span class="value">${formatCurrency(installationFee)}</span>
+                </div>
+                <div class="summary-item">
+                    <span class="label">Programming Fee</span>
+                    <span class="value">${formatCurrency(programmingFee)}</span>
+                </div>
+                <div class="summary-item discount">
+                    <span class="label">Discount</span>
+                    <span class="value">${formatDiscount(discountValue)}</span>
+                </div>
+                <div class="summary-item subtle">
+                    <span class="label">Estimated Work Days</span>
+                    <span class="value">${workDaysDisplay}</span>
+                </div>
+                <div class="summary-item highlight">
+                    <span class="label">Grand Total</span>
+                    <span class="value">${formatCurrency(totalAmount)}</span>
+                </div>
+            </div>
+        </section>
 
-        <table class="summary-table avoid-break">
-            <tr><td>Products Total:</td><td>AED ${productsTotal.toFixed(2)}</td></tr>
-            <tr><td>Installation:</td><td>AED ${this.quotationData.labor.installationFee.toFixed(2)}</td></tr>
-            <tr><td>Programming:</td><td>AED ${this.quotationData.labor.programmingFee.toFixed(2)}</td></tr>
-            <tr><td>Discount:</td><td>-AED ${this.quotationData.labor.discount.toFixed(2)}</td></tr>
-            <tr><td>Estimated Work Days:</td><td>${workDays}</td></tr>
-            <tr class="total-row"><td><strong>Total:</strong></td><td><strong>AED ${this.quotationData.total.toFixed(2)}</strong></td></tr>
-        </table>
+        <section class="section-block card table-card">
+            <div class="section-heading">
+                <h2>Scope of Work</h2>
+                <span>Itemized bill of materials & services</span>
+            </div>
+            <div class="table-wrapper">
+                <table class="products-table">
+                    <thead>
+                        <tr>
+                            <th>Item No.</th>
+                            <th>Image</th>
+                            <th>Item Name</th>
+                            <th>Description & Options</th>
+                            <th>Quantity</th>
+                            <th>Unit Price</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${productsRows}
+                    </tbody>
+                </table>
+            </div>
+        </section>
 
-        <div class="page-break"></div>
+        <section class="section-block card neutral force-break">
+            <div class="section-heading">
+                <h2>Terms & Conditions</h2>
+                <span>Project execution & warranty</span>
+            </div>
+            <div class="two-column">
+                <div>
+                    <h3>Payment Schedule</h3>
+                    <ul>
+                        <li>Initial Payment: 50% of total amount to be paid upon signing the contract.</li>
+                        <li>Installation Start: Installation works commence 25 days after contract signing.</li>
+                        <li>Final Payment: Remaining 50% upon completion of delivery, installation, and testing.</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3>Warranty & Support</h3>
+                    <ul>
+                        <li>All devices include a 24-month manufacturer warranty.</li>
+                        <li>Installation and programming are covered by a 3-month service warranty.</li>
+                        <li>Additional requests or change orders will be quoted separately.</li>
+                    </ul>
+                </div>
+            </div>
+            <p class="text-body"><strong>Installation Duration:</strong> ${workDaysDisplay}, depending on project size and site conditions.</p>
+            <p class="text-body"><strong>Quotation Validity:</strong> 30 days from issue date.</p>
+        </section>
 
-        <h2 class="section-title">Terms & Conditions</h2>
-        <h3>Payment Terms:</h3>
-        <ul>
-            <li>Initial Payment: 50% of total amount to be paid upon signing contract</li>
-            <li>Installation Start: Installation works commence 25 days after contract signing</li>
-            <li>Final Payment: Remaining 50% upon completion of delivery, installation, and testing</li>
-        </ul>
+        <section class="section-block card soft no-break">
+            <div class="section-heading">
+                <h2>Banking Information</h2>
+                <span>Payment destination</span>
+            </div>
+            <div class="bank-grid">
+                <div class="bank-item">
+                    <span class="label">Account Name</span>
+                    <span class="value">ZUCCESS INTELLIGENT HOME (S.P.S. – L.L.C)</span>
+                </div>
+                <div class="bank-item">
+                    <span class="label">Account Number</span>
+                    <span class="value">0193586397001</span>
+                </div>
+                <div class="bank-item">
+                    <span class="label">IBAN</span>
+                    <span class="value">AE30 0400 0001 9358 6397 001</span>
+                </div>
+                <div class="bank-item">
+                    <span class="label">Currency</span>
+                    <span class="value">AED (United Arab Emirates Dirham)</span>
+                </div>
+            </div>
+        </section>
 
-        <h3>Installation Duration:</h3>
-        <p>${workDays} working day(s), depending on project size and site conditions.</p>
-
-        <h3>Warranty & Support:</h3>
-        <ul>
-            <li>All devices include 24-month manufacturer warranty</li>
-            <li>Installation and programming covered by 3-month service warranty</li>
-            <li>Additional requests quoted separately</li>
-        </ul>
-
-        <p><strong>Quotation Validity:</strong> 30 days from issue date.</p>
-
-        <h2 class="section-title">Bank Details</h2>
-        <div class="bank-details avoid-break">
-            <p><strong>Bank Account Details – ZUCCESS INTELLIGENT HOME (S.P.S. – L.L.C)</strong></p>
-            <p>Account Name: ZUCCESS INTELLIGENT HOME (S.P.S. – L.L.C)</p>
-            <p>Account Number: 0193586397001</p>
-            <p>IBAN: AE30 0400 0001 9358 6397 001</p>
-            <p>Currency: AED (United Arab Emirates Dirham)</p>
-        </div>
-
-        <div class="signature-block avoid-break">
+        <section class="section-block signature-card no-break">
             <div class="signature-details">
-                <p>Prepared by: ${this.currentUser?.full_name || 'Zuccess Team'}</p>
-                <p>Date: ${currentDate}</p>
+                <strong>Prepared by:</strong> ${preparedBy}<br>
+                Date: ${currentDate}
             </div>
             <img src="${stampLogo}" alt="Company stamp" class="document-stamp">
-        </div>
+        </section>
 
-        <div class="footer avoid-break">
+        <div class="footer no-break">
             ZUCCESS - Intelligent Home UAE License No.: 132872<br>
             www.zuccess.net | +971 54 437 5797
         </div>
-    </div>
+    </main>
 </body>
 </html>`;
     }
