@@ -1,6 +1,7 @@
 const USER_STORAGE_KEY = 'zuccess_user';
 const DRAFT_STORAGE_KEY = 'zuccess_quotation_draft_v2';
-const PDF_GENERATION_DELAY_MS = 50000;
+// Removed artificial delay before PDF generation
+const PDF_GENERATION_DELAY_MS = 0;
 
 class ZuccessQuoter {
     constructor() {
@@ -1635,26 +1636,23 @@ class ZuccessQuoter {
         this.calculateTotal({ silent: true });
 
         const quotationNumber = 'QTN-' + Date.now().toString().slice(-6);
-        this.showLoading(true);
 
         try {
-            await this.delay(PDF_GENERATION_DELAY_MS);
             await this.generatePDF(quotationNumber);
             const saveResult = await this.saveQuotation(quotationNumber);
 
             if (saveResult?.success) {
-                this.showNotification('Quotation PDF generated successfully!', 'success');
+                this.showNotification('Quotation PDF downloaded. Quotation saved.', 'success');
                 this.clearDraft();
                 this.resetFlow({ preserveUser: true });
             } else {
-                this.showNotification('Quotation PDF generated, but Supabase could not be reached. Data remains saved locally for retry.', 'warning');
+                this.showNotification('PDF downloaded. Supabase unreachable; data kept locally for retry.', 'warning');
             }
         } catch (error) {
             console.error('Error generating quotation PDF:', error);
             const message = error?.message || 'Error generating quotation PDF. Please try again.';
             this.showNotification(message, 'error');
         } finally {
-            this.showLoading(false);
             this.isGenerating = false;
         }
     }
@@ -1662,132 +1660,52 @@ class ZuccessQuoter {
     async generatePDF(quotationNumber) {
         const quotationHTML = this.createQuotationHTML(quotationNumber);
 
-        const tryIframePrint = () => new Promise((resolve, reject) => {
-            const frame = document.createElement('iframe');
-            frame.style.position = 'fixed';
-            frame.style.right = '0';
-            frame.style.bottom = '0';
-            // Use non-zero size to improve reliability on desktop browsers
-            frame.style.width = '1px';
-            frame.style.height = '1px';
-            frame.style.border = '0';
-            frame.style.visibility = 'hidden';
+        // Ensure html2pdf is available
+        if (typeof window.html2pdf === 'undefined') {
+            throw new Error('PDF library not loaded. Please check your internet connection.');
+        }
 
-            const cleanup = () => {
-                setTimeout(() => {
-                    if (frame.parentNode) {
-                        frame.parentNode.removeChild(frame);
-                    }
-                }, 1000);
-            };
+        // Parse the HTML string into a Document and extract the content + styles
+        const parsed = new DOMParser().parseFromString(quotationHTML, 'text/html');
+        const shell = parsed.querySelector('.document-shell');
+        const styleEl = parsed.querySelector('style');
+        if (!shell) {
+            throw new Error('Unable to prepare document for PDF');
+        }
 
-            let completed = false;
-            const finish = () => {
-                if (completed) return;
-                completed = true;
-                cleanup();
-                resolve();
-            };
+        // Render into a hidden container to convert to PDF
+        const container = document.createElement('div');
+        container.style.position = 'fixed';
+        container.style.left = '-99999px';
+        container.style.top = '0';
+        container.style.width = '800px';
+        container.style.background = '#fff';
 
-            const handlePrint = () => {
-                try {
-                    const frameWindow = frame.contentWindow;
-                    if (!frameWindow) {
-                        throw new Error('Unable to access print frame');
-                    }
-                    if (typeof frameWindow.print !== 'function') {
-                        throw new Error('Print API unavailable');
-                    }
+        if (styleEl && styleEl.textContent) {
+            const inlineStyle = document.createElement('style');
+            inlineStyle.textContent = styleEl.textContent;
+            container.appendChild(inlineStyle);
+        }
+        container.appendChild(shell);
+        document.body.appendChild(container);
 
-                    const afterPrint = () => {
-                        frameWindow.removeEventListener('afterprint', afterPrint);
-                        finish();
-                    };
-                    frameWindow.addEventListener('afterprint', afterPrint, { once: true });
+        const element = shell;
 
-                    // Fallback in case afterprint doesn't fire (some browsers)
-                    setTimeout(() => {
-                        frameWindow.removeEventListener('afterprint', afterPrint);
-                        finish();
-                    }, 8000);
-
-                    frameWindow.focus();
-                    frameWindow.print();
-                } catch (error) {
-                    cleanup();
-                    reject(error);
-                }
-            };
-
-            frame.onload = handlePrint;
-
-            frame.onerror = () => {
-                cleanup();
-                reject(new Error('Unable to load document for PDF generation'));
-            };
-
-            document.body.appendChild(frame);
-
-            if ('srcdoc' in frame) {
-                frame.srcdoc = quotationHTML;
-            } else {
-                const frameWindow = frame.contentWindow;
-                if (!frameWindow) {
-                    cleanup();
-                    reject(new Error('Unable to prepare print frame'));
-                    return;
-                }
-                frameWindow.addEventListener('load', handlePrint, { once: true });
-                const frameDoc = frameWindow.document;
-                frameDoc.open();
-                frameDoc.write(quotationHTML);
-                frameDoc.close();
-            }
-        });
-
-        const tryWindowPrint = () => new Promise((resolve, reject) => {
-            const w = window.open('', '_blank');
-            if (!w) {
-                reject(new Error('Popup blocked'));
-                return;
-            }
-            w.document.open();
-            w.document.write(quotationHTML);
-            w.document.close();
-
-            const finish = () => {
-                try { w.close(); } catch (e) {}
-                resolve();
-            };
-
-            const afterPrint = () => {
-                w.removeEventListener('afterprint', afterPrint);
-                finish();
-            };
-            w.addEventListener('afterprint', afterPrint, { once: true });
-
-            // Fallback in case afterprint doesn't fire
-            setTimeout(() => {
-                w.removeEventListener('afterprint', afterPrint);
-                finish();
-            }, 8000);
-
-            w.focus();
-            setTimeout(() => {
-                try {
-                    w.print();
-                } catch (e) {
-                    try { w.close(); } catch (err) {}
-                    reject(e);
-                }
-            }, 100);
-        });
+        const opt = {
+            margin:       [10, 10, 10, 10],
+            filename:     `${quotationNumber}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
 
         try {
-            await tryIframePrint();
-        } catch (err) {
-            console.warn('Iframe print failed, falling back to window:', err);
-            await tryWindowPrint();
+            await window.html2pdf().set(opt).from(element).save();
+        } finally {
+            // Cleanup container
+            if (container && container.parentNode) {
+                container.parentNode.removeChild(container);
+            }
         }
     }
 
@@ -1799,6 +1717,7 @@ class ZuccessQuoter {
         const headerLogo = this.documentAssets?.headerLogo || 'zuccess_logo_in_document.png';
         const brandLogo = brandDetails?.documentLogo || brandDetails?.websiteLogo || headerLogo;
         const stampLogo = this.documentAssets?.stamp || 'Zuccess%20Stamp.png';
+        const workDays = Number(this.quotationData?.labor?.days) || 0;
 
         const productsRows = this.selectedProducts.map((product, index) => {
             const optionParts = [];
@@ -1859,6 +1778,7 @@ class ZuccessQuoter {
         .signature-details { font-size: 13px; color: #555; }
         .document-stamp { width: 140px; height: auto; object-fit: contain; }
         .footer { margin-top: 32px; text-align: center; font-size: 12px; color: #777; line-height: 1.5; }
+        .bank-details { margin-top: 20px; padding: 12px; background: #fafafa; border: 1px solid #e4e4e4; border-radius: 8px; }
     </style>
 </head>
 <body>
@@ -1914,6 +1834,7 @@ class ZuccessQuoter {
             <tr><td>Installation:</td><td>AED ${this.quotationData.labor.installationFee.toFixed(2)}</td></tr>
             <tr><td>Programming:</td><td>AED ${this.quotationData.labor.programmingFee.toFixed(2)}</td></tr>
             <tr><td>Discount:</td><td>-AED ${this.quotationData.labor.discount.toFixed(2)}</td></tr>
+            <tr><td>Estimated Work Days:</td><td>${workDays}</td></tr>
             <tr class="total-row"><td><strong>Total:</strong></td><td><strong>AED ${this.quotationData.total.toFixed(2)}</strong></td></tr>
         </table>
 
@@ -1926,7 +1847,7 @@ class ZuccessQuoter {
         </ul>
 
         <h3>Installation Duration:</h3>
-        <p>5 to 10 working days, depending on project size and site conditions.</p>
+        <p>${workDays} working day(s), depending on project size and site conditions.</p>
 
         <h3>Warranty & Support:</h3>
         <ul>
@@ -1936,6 +1857,15 @@ class ZuccessQuoter {
         </ul>
 
         <p><strong>Quotation Validity:</strong> 30 days from issue date.</p>
+
+        <h2>Bank Details</h2>
+        <div class="bank-details">
+            <p><strong>Bank Account Details – ZUCCESS INTELLIGENT HOME (S.P.S. – L.L.C)</strong></p>
+            <p>Account Name: ZUCCESS INTELLIGENT HOME (S.P.S. – L.L.C)</p>
+            <p>Account Number: 0193586397001</p>
+            <p>IBAN: AE30 0400 0001 9358 6397 001</p>
+            <p>Currency: AED (United Arab Emirates Dirham)</p>
+        </div>
 
         <div class="signature-block">
             <div class="signature-details">
