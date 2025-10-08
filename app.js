@@ -88,6 +88,8 @@ class ZuccessQuoter {
             brandModal: document.getElementById('brand-modal'),
             brandSelect: document.getElementById('brand-select'),
             brandConfirmBtn: document.getElementById('brand-confirm-btn'),
+            loadQuoteInput: document.getElementById('load-quotation-number'),
+            loadQuoteBtn: document.getElementById('load-quotation-btn'),
             brandPreview: document.getElementById('brand-preview'),
             brandPreviewLogo: document.getElementById('brand-preview-logo'),
             brandPreviewName: document.getElementById('brand-preview-name'),
@@ -154,6 +156,10 @@ class ZuccessQuoter {
 
         if (brandConfirmBtn) {
             brandConfirmBtn.addEventListener('click', () => this.confirmBrandSelection());
+        }
+
+        if (this.dom.loadQuoteBtn) {
+            this.dom.loadQuoteBtn.addEventListener('click', () => this.handleLoadQuotationClick());
         }
 
         if (changeBrandBtn) {
@@ -325,6 +331,138 @@ class ZuccessQuoter {
         const meta = this.brandMeta?.[brandKey];
         const canContinue = Boolean(brandKey && !(meta && meta.comingSoon));
         this.dom.brandConfirmBtn.disabled = !canContinue;
+    }
+
+    async handleLoadQuotationClick() {
+        const quoteNumber = this.dom.loadQuoteInput?.value.trim();
+        if (!quoteNumber) {
+            this.showNotification('Please enter a quotation number', 'error');
+            return;
+        }
+
+        try {
+            const record = await this.fetchQuotationByNumber(quoteNumber);
+            if (!record) {
+                this.showNotification('Quotation not found', 'error');
+                return;
+            }
+
+            await this.applyLoadedQuotation(record);
+            this.showNotification('Quotation loaded and synced to catalog', 'success');
+            this.showBrandModal(false);
+            this.showPage('catalog-page');
+        } catch (error) {
+            console.error('Load quotation error:', error);
+            this.showNotification(error?.message || 'Unable to load quotation', 'error');
+        }
+    }
+
+    async fetchQuotationByNumber(quotationNumber) {
+        const client = await this.ensureSupabaseClient();
+        if (!client) {
+            throw new Error('Supabase is not configured. Cannot load quotations.');
+        }
+
+        const tableName = (typeof TABLES !== 'undefined' && TABLES.QUOTATIONS) ? TABLES.QUOTATIONS : 'quotations';
+        const { data, error } = await this.runWithRetry(
+            () => client
+                .from(tableName)
+                .select('quotation_number, selected_products, labor_days, programming_fee, installation_fee, discount, customer_name, customer_phone, building_location, extra_notes')
+                .eq('quotation_number', quotationNumber)
+                .maybeSingle(),
+            { retries: 1, timeoutMs: 8000, backoffMs: 600 }
+        );
+
+        if (error) {
+            throw new Error(error.message || 'Error fetching quotation');
+        }
+
+        return data || null;
+    }
+
+    async applyLoadedQuotation(record) {
+        const items = Array.isArray(record?.selected_products) ? record.selected_products : [];
+        if (!items.length) {
+            throw new Error('Quotation has no selected products to load');
+        }
+
+        // Deduce brand from first product id (e.g., "orvibo-...", "zuccess-...")
+        const firstId = items[0]?.id || '';
+        const brandKey = String(firstId).split('-')[0].toLowerCase();
+        const validBrand = this.brandMeta?.[brandKey] ? brandKey : (this.selectedBrand || '');
+        if (!validBrand) {
+            throw new Error('Unable to determine brand from the quotation');
+        }
+
+        const isChanging = this.selectedBrand !== validBrand;
+        if (isChanging) {
+            this.resetSelectionsForBrandChange();
+        }
+
+        this.selectedBrand = validBrand;
+        this.pendingBrand = validBrand;
+        if (this.dom.brandSelect) {
+            this.dom.brandSelect.value = validBrand;
+        }
+        this.applyBrandTheme(validBrand);
+        this.updateBrandConfirmState();
+
+        // Ensure catalog is loaded for the brand
+        await this.ensureProductsLoaded(true);
+
+        // Pre-seed existing selection so option values can be respected even if the card isn't in the DOM
+        this.selectedProducts = items.map(sp => ({
+            id: sp.id,
+            name: sp.name || '',
+            description: sp.description || '',
+            price: Number(sp.price) || 0,
+            quantity: 0,
+            subtotal: 0,
+            selectedColor: sp.selectedColor || '',
+            selectedProtocol: sp.selectedProtocol || ''
+        }));
+
+        // Apply quantities (uses options from existing selection when card is not present)
+        for (const sp of items) {
+            const qty = Number(sp.quantity) || 0;
+            if (qty > 0) {
+                this.updateProductQuantity(sp.id, qty, { silent: true });
+            }
+        }
+
+        // Try to switch to the category of the first product for UX
+        const firstProduct = this.findProductById(items[0].id);
+        if (firstProduct?.category) {
+            this.showCategory(firstProduct.category, { silent: true });
+        } else {
+            this.showCategory(this.activeCategory, { silent: true });
+        }
+
+        // Optionally load labor/customer details if present
+        if (typeof record.labor_days === 'number' && this.dom.workDaysInput) {
+            this.dom.workDaysInput.value = record.labor_days;
+        }
+        if (typeof record.programming_fee === 'number' && this.dom.programmingInput) {
+            this.dom.programmingInput.value = record.programming_fee;
+        }
+        if (typeof record.installation_fee === 'number' && this.dom.installationInput) {
+            this.dom.installationInput.value = record.installation_fee;
+        }
+        if (typeof record.discount === 'number' && this.dom.discountInput) {
+            // Put numeric discount into input so calculation picks it up
+            this.dom.discountInput.value = String(Number(record.discount) || 0);
+        }
+
+        // Customer (kept minimal; not required to sync products)
+        if (record.customer_name) this.dom.customerName.value = record.customer_name;
+        if (record.customer_phone) this.dom.customerPhone.value = record.customer_phone;
+        if (record.building_location) this.dom.customerLocation.value = record.building_location;
+        if (record.extra_notes) this.dom.customerNotes.value = record.extra_notes;
+
+        // Recalculate totals and persist
+        this.calculateTotal({ silent: true });
+        this.updateSelectedSummary({ animate: false });
+        this.persistDraft();
     }
 
     async confirmBrandSelection() {
