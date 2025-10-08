@@ -1834,7 +1834,7 @@ class ZuccessQuoter {
             filename:     `${quotationNumber}.pdf`,
             image:        { type: 'jpeg', quality: 0.98 },
             html2canvas:  { scale: 2, useCORS: true, letterRendering: true },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' },
             pagebreak:    { mode: ['css', 'legacy'], avoid: ['.avoid-break', '.no-break', '.signature-card', 'tr'] }
         };
 
@@ -1949,9 +1949,10 @@ class ZuccessQuoter {
         .chip-label { font-size: 11px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.08em; }
         .chip-value { font-weight: 700; font-size: 15px; color: var(--accent); }
         .section-block { margin-bottom: 24px; }
+        .section-block + .section-block { page-break-before: always; }
         .card { border-radius: 16px; border: 1px solid var(--border); box-shadow: 0 14px 36px rgba(15,23,42,0.08); background: var(--surface); padding: 20px 24px; }
-        .card.accent { background: linear-gradient(145deg, rgba(234,121,70,0.14), rgba(234,121,70,0.06)); border-color: rgba(234,121,70,0.35); }
-        .card.soft { background: #fdfaf7; }
+        .card.accent { background: linear-gradient(135deg, rgba(234,121,70,0.35), rgba(234,121,70,0.18)); border-color: rgba(234,121,70,0.55); box-shadow: 0 18px 42px rgba(234,121,70,0.28); }
+        .card.soft { background: rgba(234,121,70,0.18); border-color: rgba(234,121,70,0.4); }
         .card.table-card { padding: 20px 0 0; border: 1px solid rgba(234,121,70,0.2); box-shadow: 0 20px 40px rgba(15,23,42,0.12); border-radius: 18px; }
         .card.table-card .section-heading { padding: 0 24px; }
         .card.table-card .table-wrapper { padding: 0 24px 24px; }
@@ -1966,7 +1967,7 @@ class ZuccessQuoter {
         .summary-item { background: #fff; border: 1px dashed rgba(234,121,70,0.4); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
         .summary-item .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
         .summary-item .value { font-size: 16px; font-weight: 700; color: var(--ink); }
-        .summary-item.highlight { background: var(--accent); color: #fff; border: none; box-shadow: 0 18px 40px rgba(234,121,70,0.32); }
+        .summary-item.highlight { background: linear-gradient(135deg, rgba(234,121,70,0.85), rgba(234,121,70,0.68)); color: #fff; border: none; box-shadow: 0 22px 48px rgba(234,121,70,0.32); }
         .summary-item.highlight .label { color: rgba(255,255,255,0.8); }
         .summary-item.highlight .value { color: #fff; }
         .summary-item.discount .value { color: var(--accent); }
@@ -1990,9 +1991,8 @@ class ZuccessQuoter {
         .bank-item { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
         .bank-item .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
         .bank-item .value { font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 6px; }
-        .signature-card { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-radius: 16px; border: 1px solid var(--border); background: #fff; padding: 16px 24px; box-shadow: 0 12px 28px rgba(15,23,42,0.06); }
+        .signature-card { display: flex; align-items: flex-start; justify-content: flex-start; gap: 18px; border-radius: 16px; border: 1px solid rgba(234,121,70,0.4); background: linear-gradient(135deg, rgba(234,121,70,0.18), rgba(234,121,70,0.08)); padding: 18px 24px; box-shadow: 0 18px 36px rgba(234,121,70,0.25); }
         .signature-details { font-size: 13px; color: var(--muted); line-height: 1.6; }
-        .document-stamp { width: 140px; height: auto; object-fit: contain; }
         .footer { border-top: 1px solid var(--border); margin-top: 28px; padding-top: 16px; text-align: center; font-size: 12px; color: var(--muted); line-height: 1.5; }
         .no-break { page-break-inside: avoid; break-inside: avoid; }
         .force-break { page-break-before: always; break-before: page; }
@@ -2009,7 +2009,7 @@ class ZuccessQuoter {
                 <img src="${headerLogo}" alt="Zuccess logo" class="document-logo">
                 <div>
                     <h1 class="company-name">Zuccess Intelligent Systems L.L.C</h1>
-                    <p class="company-meta">Shop02, Akh Building, Jurf3, Ajman<br>www.zuccess.net | +971 54 437 5797</p>
+                    <p class="company-meta">Shop02, Akh Building, Jurf3, Ajman<br>www.zuccess.ai | +971 54 437 5797</p>
                 </div>
             </div>
             <div class="brand-chip">
@@ -2177,12 +2177,11 @@ class ZuccessQuoter {
                 <strong>Prepared by:</strong> ${preparedBy}<br>
                 Date: ${currentDate}
             </div>
-            <img src="${stampLogo}" alt="Company stamp" class="document-stamp">
         </section>
 
         <div class="footer no-break">
             ZUCCESS - Intelligent Home UAE License No.: 132872<br>
-            www.zuccess.net | +971 54 437 5797
+            www.zuccess.ai | +971 54 437 5797
         </div>
     </main>
 </body>
